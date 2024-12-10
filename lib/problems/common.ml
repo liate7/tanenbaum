@@ -33,3 +33,12 @@ module String = struct
   include Stringext
   include CCStringLabels
 end
+
+module IntIntOrder = struct
+  type t = int * int
+
+  let compare =
+    Fun.lexicographic
+      (fun (x, _) (x', _) -> Int.compare x x')
+      (fun (_, y) (_, y') -> Int.compare y y')
+end

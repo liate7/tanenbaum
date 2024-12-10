@@ -32,14 +32,7 @@ let example =
    61,13,29\n\
    97,13,75,29,47"
 
-module IntPairSet = Set.Make (struct
-  type t = int * int
-
-  let compare =
-    Fun.lexicographic
-      (fun (x, _) (x', _) -> Int.compare x x')
-      (fun (_, y) (_, y') -> Int.compare y y')
-end)
+module IntPairSet = Set.Make (IntIntOrder)
 
 let parse str =
   match String.cut ~on:"\n\n" str with
