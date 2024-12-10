@@ -6,3 +6,4 @@ inputs/
 .DS_Store
 .envrc
 
+/dev-tools.locks/
