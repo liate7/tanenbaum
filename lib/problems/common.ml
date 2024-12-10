@@ -28,3 +28,8 @@ module List = struct
   let monoid_map_reduce ~(m : 'a Monoid.t) ~f ls =
     List.fold_on_map ~reduce:m.reduce ~f ~init:m.identity ls
 end
+
+module String = struct
+  include Stringext
+  include CCStringLabels
+end
