@@ -22,6 +22,7 @@
  (depends
   ocaml
   reason
+  re
   dune
   containers
   (cmdliner(>= 1.2.0))

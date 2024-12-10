@@ -12,6 +12,7 @@ bug-reports: "https://github.com/sixstring982/tanenbaum/issues"
 depends: [
   "ocaml"
   "reason"
+  "re"
   "dune" {>= "3.7"}
   "containers"
   "cmdliner" {>= "1.2.0"}
