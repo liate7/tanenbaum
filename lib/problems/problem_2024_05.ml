@@ -60,16 +60,18 @@ let parse str =
       in
       (rules, updates)
 
-let update_is_valid rules update =
-  List.diagonal update
-  |> List.for_all ~f:(fun (before, after) ->
-         not @@ IntPairSet.mem (after, before) rules)
+let update_cmp rules l r =
+  if IntPairSet.mem (r, l) rules then 1
+  else if IntPairSet.mem (l, r) rules then -1
+  else 0
+
+let update_is_valid rules update = List.is_sorted ~cmp:(update_cmp rules) update
+
+let middle_item lst =
+  let len = List.length lst in
+  List.nth lst @@ (len / 2)
 
 module Part_1 = struct
-  let middle_item lst =
-    let len = List.length lst in
-    List.nth lst @@ (len / 2)
-
   let run input =
     Result.guard_str @@ fun () ->
     let rules, updates = parse input in
@@ -79,5 +81,14 @@ module Part_1 = struct
 end
 
 module Part_2 = struct
-  let run (input : string) : (string, string) result = Ok input
+  let run input =
+    Result.guard_str @@ fun () ->
+    let rules, updates = parse input in
+    let invalid_updates =
+      List.filter ~f:(Fun.negate @@ update_is_valid rules) updates
+    in
+    let cmp = update_cmp rules in
+    List.monoid_map_reduce ~m:Monoid.add invalid_updates ~f:(fun update ->
+        List.sort ~cmp update |> middle_item)
+    |> Int.to_string
 end
