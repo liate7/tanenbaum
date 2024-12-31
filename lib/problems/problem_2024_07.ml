@@ -14,11 +14,14 @@ let example =
    21037: 9 7 18 13\n\
    292: 11 6 16 20\n"
 
-module Test = struct
-  type t = int * int list
-  type operation = Times | Plus
+module Test_f (Operation : sig
+  type t
 
-  let operation_func = function Times -> ( * ) | Plus -> ( + )
+  val enum : t list
+  val perform : t -> int -> int -> int
+end) =
+struct
+  type t = int * int list
 
   let parse str =
     let lines = String.trim str |> String.lines
@@ -31,20 +34,18 @@ module Test = struct
     in
     List.map ~f lines
 
-  (* let operations = [ ( * ); ( + )] *)
-
   let operations (total, to_combine) =
-    let open Option.Infix in
     let rec go acc = function
       | [] when acc = total -> Some []
       | [] -> None
-      | i :: is when i * acc <= total ->
-          go (i * acc) is
-          >|= List.cons Times
-          |> Option.or_lazy ~else_:(fun () ->
-                 go (i + acc) is >|= List.cons Plus)
-      | i :: is when i + acc <= total -> go (i + acc) is >|= List.cons Plus
-      | _ -> None
+      | i :: is ->
+          List.fold_while ~init:None Operation.enum ~f:(fun _ op ->
+              let next = Operation.perform op acc i in
+              if next > total then (None, `Continue)
+              else
+                match go next is with
+                | Some l -> (Some (op :: l), `Stop)
+                | _ -> (None, `Continue))
     in
     match to_combine with i :: is -> go i is | [] -> go 0 []
 
@@ -52,6 +53,15 @@ module Test = struct
 end
 
 module Part_1 = struct
+  module Operation = struct
+    type t = Times | Plus
+
+    let enum = [ Times; Plus ]
+    let perform = function Times -> ( * ) | Plus -> ( + )
+  end
+
+  module Test = Test_f (Operation)
+
   let run (input : string) : (string, string) result =
     Result.guard_str_trace @@ fun () ->
     Test.parse input
@@ -61,5 +71,24 @@ module Part_1 = struct
 end
 
 module Part_2 = struct
-  let run (input : string) : (string, string) result = Ok input
+  module Operation = struct
+    type t = Times | Plus | Dec_concat
+
+    let enum = [ Times; Dec_concat; Plus ]
+
+    let perform = function
+      | Times -> ( * )
+      | Plus -> ( + )
+      | Dec_concat ->
+          fun l r -> Int.of_string_exn (Int.to_string l ^ Int.to_string r)
+  end
+
+  module Test = Test_f (Operation)
+
+  let run (input : string) : (string, string) result =
+    Result.guard_str_trace @@ fun () ->
+    Test.parse input
+    |> List.fold_left ~init:0 ~f:(fun sum ((total, _) as t) ->
+           if Test.is_valid t then sum + total else sum)
+    |> Int.to_string
 end
