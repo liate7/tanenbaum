@@ -28,6 +28,16 @@ module Rotation = struct
     | 'R' -> `R (Int.of_string_exn <| String.drop 1 str)
     | 'L' -> `L (Int.of_string_exn <| String.drop 1 str)
     | _ -> failwith "Not a valid rotation"
+
+  (* Part 2 *)
+  let decompose = function `L n -> (`L, n) | `R n -> (`R, n)
+
+  let to_fun = function
+    | `R -> ( + )
+    | `L ->
+        (* This could just be `( - )`, but this makes the using code cleaner
+         and is logically just as correct *)
+        fun l r -> (match l with 0 -> 100 | l -> l) - r
 end
 
 let start = 50
@@ -56,33 +66,29 @@ you're actually supposed to count the number of times any click causes the dial 
 regardless of whether it happens during a rotation or at the end of one.
 *)
 
-let div_mod l r =
-  let quot = if l > 0 then l / r else 1 + abs (l / r) in
-  (quot, l mod r)
+let div_mod l r = (Int.floor_div l r, l mod r)
+let ( /% ) = div_mod
 
-(* I actually ended up with ≈this; afterward is an attempt to do this analytically *)
-module Part_2_brute_force = struct
-  let expand = function
-    | (`R 0 | `L 0) as zero -> [ zero ]
-    | `R n -> List.repeat n [ `R 1 ]
-    | `L n -> List.repeat n [ `L 1 ]
+module Part_2 = struct
+  type state = { zeros : int; pos : int }
 
-  let go rs = rs |> List.flat_map ~f:expand |> Part_1.go
-
-  let run (input : string) : (string, string) result =
-    Result.guard_str @@ fun () -> parse input |> go |> Int.to_string
-end
-
-module Part_2_collapsed = struct
-  let rot (state, at) (rot : Rotation.t) =
-    let un_mod = match rot with `L n -> at - n | `R n -> at + n in
-    let quot, rem = div_mod un_mod 100 in
-    let quot = if at = 0 then max 0 @@ (quot - 1) else quot in
-    (state + quot, rem)
+  (* Based heavily on [[https://entropicthoughts.com/advent-of-code-in-dialog]],
+     mod (some?) dialog weirdness *)
+  let rot { zeros; pos = at } action =
+    (* (This could just be a different parser, but I otherwise like the pairing) *)
+    let dir, n = Rotation.decompose action in
+    (* Always hit zero at least `div` times, so decompose that out *)
+    let zeros, change = n /% 100 |> Pair.map_fst (( + ) zeros) in
+    let pos = Rotation.to_fun dir at change in
+    if pos = pos mod 100 && pos <> 0 then
+      (* We didn't pass 0 again; we're good *)
+      { zeros; pos }
+    else
+      (* We passed 0 again, necessarily once; fix it up *)
+      { zeros = zeros + 1; pos = pos mod 100 }
 
   let go rs =
-    let ret, _ = rs |> List.fold_left ~f:rot ~init:(0, start) in
-    ret
+    (rs |> List.fold_left ~f:rot ~init:{ zeros = 0; pos = start }).zeros
 
   let run (input : string) : (string, string) result =
     Result.guard_str @@ fun () -> parse input |> go |> Int.to_string
@@ -107,5 +113,3 @@ module Part_2_collapsed = struct
   times during a rotation. So, in this example, the new password would be 6.
   *)
 end
-
-module Part_2 = Part_2_brute_force

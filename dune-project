@@ -28,5 +28,6 @@
   stringext
   (cmdliner(>= 1.2.0))
   (piaf (>= 0.2.0))
-  (fmt (>= 0.9.0)))
+  (fmt (>= 0.9.0))
+  qcheck)
  (tags ("advent-of-code")))
