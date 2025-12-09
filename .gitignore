@@ -7,3 +7,4 @@ inputs/
 .envrc
 
 /dev-tools.locks/
+/.direnv/
