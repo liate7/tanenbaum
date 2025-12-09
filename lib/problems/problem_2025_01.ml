@@ -21,12 +21,12 @@ the sequence.
  *)
 
 module Rotation = struct
-  type t = Left of int | Right of int
+  type t = [ `L of int | `R of int ]
 
   let of_string str =
     match String.get str 0 with
-    | 'R' -> Right (Int.of_string_exn <| String.drop 1 str)
-    | 'L' -> Left (Int.of_string_exn <| String.drop 1 str)
+    | 'R' -> `R (Int.of_string_exn <| String.drop 1 str)
+    | 'L' -> `L (Int.of_string_exn <| String.drop 1 str)
     | _ -> failwith "Not a valid rotation"
 end
 
@@ -39,9 +39,7 @@ let parse s =
   |> List.map ~f:Rotation.of_string
 
 module Part_1 = struct
-  let rot at = function
-    | Rotation.Left n -> (at - n) mod 100
-    | Rotation.Right n -> (at + n) mod 100
+  let rot at = function `L n -> (at - n) mod 100 | `R n -> (at + n) mod 100
 
   let go rs =
     rs
@@ -58,20 +56,56 @@ you're actually supposed to count the number of times any click causes the dial 
 regardless of whether it happens during a rotation or at the end of one.
 *)
 
-let div_mod l r = (l / r, l mod r)
+let div_mod l r =
+  let quot = if l > 0 then l / r else 1 + abs (l / r) in
+  (quot, l mod r)
 
-module Part_2 = struct
-  let rot place at (rot : Rotation.t) =
-    let un_mod = match rot with Left n -> at - n | Right n -> at + n in
-    let quot, rem = div_mod un_mod 100 in
-    place |> Ref.update (( + ) @@ Int.abs quot) |> ignore;
-    rem
+(* I actually ended up with ≈this; afterward is an attempt to do this analytically *)
+module Part_2_brute_force = struct
+  let expand = function
+    | (`R 0 | `L 0) as zero -> [ zero ]
+    | `R n -> List.repeat n [ `R 1 ]
+    | `L n -> List.repeat n [ `L 1 ]
 
-  let go rs =
-    let passes = ref 0 in
-    rs |> List.fold_left ~f:(rot passes) ~init:start |> ignore;
-    !passes
+  let go rs = rs |> List.flat_map ~f:expand |> Part_1.go
 
   let run (input : string) : (string, string) result =
     Result.guard_str @@ fun () -> parse input |> go |> Int.to_string
 end
+
+module Part_2_collapsed = struct
+  let rot (state, at) (rot : Rotation.t) =
+    let un_mod = match rot with `L n -> at - n | `R n -> at + n in
+    let quot, rem = div_mod un_mod 100 in
+    let quot = if at = 0 then max 0 @@ (quot - 1) else quot in
+    (state + quot, rem)
+
+  let go rs =
+    let ret, _ = rs |> List.fold_left ~f:rot ~init:(0, start) in
+    ret
+
+  let run (input : string) : (string, string) result =
+    Result.guard_str @@ fun () -> parse input |> go |> Int.to_string
+
+  (*
+  Following the same rotations as in the above example, the dial points at zero a few extra
+  times during its rotations:
+
+    The dial starts by pointing at 50.
+    The dial is rotated L68 to point at 82; during this rotation, it points at 0 once.
+    The dial is rotated L30 to point at 52.
+    The dial is rotated R48 to point at 0.
+    The dial is rotated L5 to point at 95.
+    The dial is rotated R60 to point at 55; during this rotation, it points at 0 once.
+    The dial is rotated L55 to point at 0.
+    The dial is rotated L1 to point at 99.
+    The dial is rotated L99 to point at 0.
+    The dial is rotated R14 to point at 14.
+    The dial is rotated L82 to point at 32; during this rotation, it points at 0 once.
+
+  In this example, the dial points at 0 three times at the end of a rotation, plus three more
+  times during a rotation. So, in this example, the new password would be 6.
+  *)
+end
+
+module Part_2 = Part_2_brute_force
