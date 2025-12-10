@@ -34,20 +34,26 @@ module Bank = struct
     String.to_array str
     |> Array.map ~f:Fun.(Char.to_string %> Int.of_string_exn)
 
-  let max_joltage (* ?(banks = 2) *) t : int =
-    let first =
-      Array.sub t ~pos:0 ~len:(Array.length t - 1)
-      |> Array.max_exn ~cmp:Int.compare
+  let max_joltage ?(banks = 2) t : int =
+    let rec go t acc banks =
+      match nat_view banks with
+      | `Succ banks' ->
+          let next =
+            Array.sub t ~pos:0 ~len:(Array.length t - banks')
+            |> Array.max_exn ~cmp:Int.compare
+          in
+          let rest =
+            let rest_start =
+              (Array.find_index ~f:(( = ) next) t
+              |> Option.get_exn_or "can't find what just found")
+              + 1
+            in
+            Array.sub t ~pos:rest_start ~len:(Array.length t - rest_start)
+          in
+          go rest (next + (10 * acc)) banks'
+      | `Zero -> acc
     in
-    let second =
-      let first_idx =
-        Array.find_index ~f:(( = ) first) t
-        |> Option.get_exn_or "can't find what just found"
-      in
-      Array.sub t ~pos:(first_idx + 1) ~len:(Array.length t - first_idx - 1)
-      |> Array.max_exn ~cmp:Int.compare
-    in
-    (first * 10) + second
+    go t 0 banks
 end
 
 let parse str = str |> String.trim |> String.lines |> List.map ~f:Bank.of_string
@@ -60,6 +66,14 @@ module Part_1 = struct
     Result.guard_str @@ fun () -> parse input |> go |> Int.to_string
 end
 
+(* Now, you need to make the largest joltage by turning on exactly twelve batteries within each
+   bank. *)
+
 module Part_2 = struct
-  let run (input : string) : (string, string) result = Ok input
+  let go banks =
+    banks
+    |> List.monoid_map_reduce ~m:Monoid.add ~f:(Bank.max_joltage ~banks:12)
+
+  let run (input : string) : (string, string) result =
+    Result.guard_str @@ fun () -> parse input |> go |> Int.to_string
 end

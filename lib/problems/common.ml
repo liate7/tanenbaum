@@ -42,3 +42,8 @@ module IntIntOrder = struct
       (fun (x, _) (x', _) -> Int.compare x x')
       (fun (_, y) (_, y') -> Int.compare y y')
 end
+
+let nat_view = function
+  | 0 -> `Zero
+  | n when n > 0 -> `Succ (n - 1)
+  | n -> failwith @@ Printf.sprintf "not a nat: %d" n
