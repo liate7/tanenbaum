@@ -47,3 +47,10 @@ let nat_view = function
   | 0 -> `Zero
   | n when n > 0 -> `Succ (n - 1)
   | n -> failwith @@ Printf.sprintf "not a nat: %d" n
+
+module Iter = struct
+  include IterLabels
+
+  let reduce ~(m : 'a Monoid.t) ls =
+    IterLabels.fold ~init:m.identity ~f:m.reduce ls
+end

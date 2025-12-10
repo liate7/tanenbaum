@@ -9,4 +9,4 @@
 
 (library
  (name problems)
- (libraries problem import containers re stringext qcheck))
+ (libraries problem import containers containers-data iter re stringext qcheck))

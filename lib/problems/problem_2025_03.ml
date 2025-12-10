@@ -27,28 +27,28 @@ let example =
 
    [I]n this example, the total output joltage is 98 + 89 + 78 + 92 = 357. *)
 
+module Dequeue = CCFQueue
+
 module Bank = struct
-  type t = int array
+  type t = int Dequeue.t
 
   let of_string str : t =
-    String.to_array str
-    |> Array.map ~f:Fun.(Char.to_string %> Int.of_string_exn)
+    String.to_iter str
+    |> Iter.map ~f:Fun.(Char.to_string %> Int.of_string_exn)
+    |> Dequeue.of_iter
 
-  let max_joltage ?(banks = 2) t : int =
-    let rec go t acc banks =
+  let max_joltage ?(banks = 2) (t : t) : int =
+    let rec go : t -> int -> int -> int =
+     fun t acc banks ->
       match nat_view banks with
       | `Succ banks' ->
           let next =
-            Array.sub t ~pos:0 ~len:(Array.length t - banks')
-            |> Array.max_exn ~cmp:Int.compare
+            Dequeue.take_back_l banks' t
+            |> fst |> Dequeue.to_iter |> Iter.max_exn ~lt:( < )
           in
           let rest =
-            let rest_start =
-              (Array.find_index ~f:(( = ) next) t
-              |> Option.get_exn_or "can't find what just found")
-              + 1
-            in
-            Array.sub t ~pos:rest_start ~len:(Array.length t - rest_start)
+            Dequeue.take_front_while (( <> ) next) t
+            |> snd |> Dequeue.take_front_exn |> snd
           in
           go rest (next + (10 * acc)) banks'
       | `Zero -> acc
@@ -56,11 +56,12 @@ module Bank = struct
     go t 0 banks
 end
 
-let parse str = str |> String.trim |> String.lines |> List.map ~f:Bank.of_string
+let parse str =
+  str |> String.trim |> String.lines_iter |> Iter.map ~f:Bank.of_string
 
 module Part_1 = struct
   let go banks =
-    banks |> List.monoid_map_reduce ~m:Monoid.add ~f:Bank.max_joltage
+    banks |> Iter.map ~f:Bank.max_joltage |> Iter.reduce ~m:Monoid.add
 
   let run (input : string) : (string, string) result =
     Result.guard_str @@ fun () -> parse input |> go |> Int.to_string
@@ -72,7 +73,8 @@ end
 module Part_2 = struct
   let go banks =
     banks
-    |> List.monoid_map_reduce ~m:Monoid.add ~f:(Bank.max_joltage ~banks:12)
+    |> Iter.map ~f:(Bank.max_joltage ~banks:12)
+    |> Iter.reduce ~m:Monoid.add
 
   let run (input : string) : (string, string) result =
     Result.guard_str @@ fun () -> parse input |> go |> Int.to_string

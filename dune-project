@@ -25,8 +25,10 @@
   re
   dune
   containers
+  containers-data
+  iter
   stringext
-  (cmdliner(>= 1.2.0))
+  (cmdliner (>= 1.2.0))
   (piaf (>= 0.2.0))
   (fmt (>= 0.9.0))
   qcheck)
