@@ -21,9 +21,9 @@ let example =
    What do you get if you add up all of the invalid IDs?  *)
 
 module Prefix = struct
-  let of_str num =
-    if String.length num mod 2 = 0 then
-      Int.of_string (String.take (String.length num / 2) num)
+  let of_str n num =
+    if String.length num mod n = 0 then
+      Int.of_string (String.take (String.length num / n) num)
     else None
 
   let upper_bound lower =
@@ -34,7 +34,9 @@ module Prefix = struct
     let expt = Int.to_float upper |> log10 |> floor in
     10. ** expt |> Int.of_float
 
-  let to_int int = Int.of_string_exn @@ Printf.sprintf "%d%d" int int
+  let to_int n int =
+    Int.to_string int |> List.replicate n |> String.concat ~sep:""
+    |> Int.of_string_exn
 end
 
 module Range = struct
@@ -44,14 +46,17 @@ module Range = struct
     let[@warning "-8"] [ lwb; upb ] = String.split_on_char ~by:'-' str in
     { lwb = inner lwb; upb = inner upb }
 
-  let contains n { lwb; upb } = Int.(lwb <= n && n <= upb)
+  let contains { lwb; upb } n = Int.(lwb <= n && n <= upb)
 
-  let prefixes { lwb; upb } : int Seq.t =
-    match (Prefix.of_str lwb, Prefix.of_str upb) with
+  let candidates n { lwb; upb } : int Seq.t =
+    match (Prefix.of_str n lwb, Prefix.of_str n upb) with
     | None, None -> Seq.empty
-    | Some lower, None -> Seq.(lower -- Prefix.upper_bound lower)
-    | None, Some upper -> Seq.(Prefix.lower_bound upper -- upper)
-    | Some lower, Some upper -> Seq.(lower -- upper)
+    | Some lower, None ->
+        Seq.(lower -- Prefix.upper_bound lower |> Seq.map (Prefix.to_int n))
+    | None, Some upper ->
+        Seq.(Prefix.lower_bound upper -- upper |> Seq.map (Prefix.to_int n))
+    | Some lower, Some upper ->
+        Seq.(lower -- upper |> Seq.map (Prefix.to_int n))
 end
 
 let parse str =
@@ -81,10 +86,8 @@ module Part_1 = struct
 
   let go vals =
     let f (range, strs) =
-      Range.prefixes strs
-      |> Seq.filter_map (fun prefix ->
-             Prefix.to_int prefix
-             |> Option.if_ (fun n -> Range.contains n range))
+      Range.candidates 2 strs
+      |> Seq.filter (Range.contains range)
       |> Seq.fold_left ( + ) 0
     in
     vals |> List.monoid_map_reduce ~f ~m:Monoid.add
@@ -93,6 +96,37 @@ module Part_1 = struct
     Ok (parse input |> go |> Int.to_string)
 end
 
+(* Now, an ID is invalid if it is made only of some sequence of digits repeated at least
+   twice. So, 12341234 (1234 two times), 123123123 (123 three times), 1212121212 (12 five
+   times), and 1111111 (1 seven times) are all invalid IDs. *)
+
+(* From the same example as before:
+
+    11-22 still has two invalid IDs, 11 and 22.
+    95-115 now has two invalid IDs, 99 and 111.
+    998-1012 now has two invalid IDs, 999 and 1010.
+    1188511880-1188511890 still has one invalid ID, 1188511885.
+    222220-222224 still has one invalid ID, 222222.
+    1698522-1698528 still contains no invalid IDs.
+    446443-446449 still has one invalid ID, 446446.
+    38593856-38593862 still has one invalid ID, 38593859.
+    565653-565659 now has one invalid ID, 565656.
+    824824821-824824827 now has one invalid ID, 824824824.
+    2121212118-2121212124 now has one invalid ID, 2121212121.
+
+  Adding up all the invalid IDs in this example produces 4174379265. *)
+
 module Part_2 = struct
-  let run (input : string) : (string, string) result = Ok input
+  let go vals =
+    let f (range, strs) =
+      Seq.(2 -- String.length strs.Range.upb)
+      |> Seq.flat_map (fun n -> Range.candidates n strs)
+      |> Seq.sort_uniq ~cmp:Int.compare
+      |> Seq.filter (Range.contains range)
+      |> Seq.fold_left ( + ) 0
+    in
+    vals |> List.monoid_map_reduce ~f ~m:Monoid.add
+
+  let run (input : string) : (string, string) result =
+    Ok (parse input |> go |> Int.to_string)
 end
