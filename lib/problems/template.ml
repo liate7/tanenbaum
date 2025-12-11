@@ -1,13 +1,30 @@
 open! Common
 
-let year = 2023
-let day = 1
-(* let example = "3   4\n4   3\n2   5\n1   3\n3   9\n3   3\n" *)
+let year = failwith "year, eg 2025"
+let day = failwith "day /of AoC/"
+let example = ""
+
+(* Problem description *)
+
+(* Example run-through *)
+
+let parse = Fun.id
+let unparse = Fun.id
 
 module Part_1 = struct
-  let run (input : string) : (string, string) result = Ok input
+  let go = Fun.id
+
+  let run (input : string) : (string, string) result =
+    Result.guard_str @@ fun () -> parse input |> go |> unparse
 end
 
+(* Problem description update *)
+
+(* Example run-through, again *)
+
 module Part_2 = struct
-  let run (input : string) : (string, string) result = Ok input
+  let go = Fun.id
+
+  let run (input : string) : (string, string) result =
+    Result.guard_str @@ fun () -> parse input |> go |> unparse
 end
