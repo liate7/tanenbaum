@@ -1,7 +1,7 @@
 open! Common
 
-let year = failwith "year, eg 2025"
-let day = failwith "day /of AoC/"
+(* let year = failwith "year, eg 2025" *)
+(* let day = failwith "day /of AoC/" *)
 let example = ""
 
 (* Problem description *)

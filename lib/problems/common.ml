@@ -53,4 +53,6 @@ module Iter = struct
 
   let reduce ~(m : 'a Monoid.t) ls =
     IterLabels.fold ~init:m.identity ~f:m.reduce ls
+
+  let ( --^ ) l r = l -- (r - 1)
 end
