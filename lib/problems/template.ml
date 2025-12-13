@@ -1,17 +1,16 @@
 open! Common
 
-(* let year = failwith "year, eg 2025" *)
-(* let day = failwith "day /of AoC/" *)
+(* let year = _ *)
+(* let day = _ *)
 let example = ""
 
 (* Problem description *)
 
 (* Example run-through *)
 
-let parse = Fun.id
-let unparse = Fun.id
-
 module Part_1 = struct
+  let parse = Fun.id
+  let unparse = Fun.id
   let go = Fun.id
 
   let run (input : string) : (string, string) result =
@@ -23,6 +22,8 @@ end
 (* Example run-through, again *)
 
 module Part_2 = struct
+  let parse = Fun.id
+  let unparse = Fun.id
   let go = Fun.id
 
   let run (input : string) : (string, string) result =
