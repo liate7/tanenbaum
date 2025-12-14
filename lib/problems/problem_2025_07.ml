@@ -131,18 +131,35 @@ let example =
 
    In this example, a tachyon beam is split a total of 21 times. *)
 
-module Tachyon_manifold = struct
-  module IntSet : sig
-    include Set.S with type elt = Int.t
+module type SETOID = sig
+  type t
+  type elt
 
-    val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
-  end = struct
-    include Set.Make (Int)
+  val of_list : elt list -> t
+  val singleton : elt -> t
+  val intersect : t -> t -> t
+  val diff : t -> t -> t
+  val cardinal : t -> int
 
-    let pp_hum f t = Format.fprintf f "%s" @@ to_string Int.to_string t
-  end
+  type entry
 
-  type t = { start : int; splits : IntSet.t list }
+  val map_elt : (elt -> elt) -> entry -> entry
+  val entry_elt : entry -> elt
+  val add_iter : t -> entry Iter.t -> t
+  val to_iter : t -> entry Iter.t
+
+  (* Visualization *)
+
+  val entry_to_char : entry -> char
+  val min_elt : t -> elt
+  val max_elt : t -> elt
+end
+
+let sub x = x - 1
+let inc x = x + 1
+
+module Tachyon_manifold (S : SETOID with type elt = Int.t) = struct
+  type t = { start : int; splits : S.t list }
 
   let of_string str =
     let start, lines =
@@ -156,42 +173,210 @@ module Tachyon_manifold = struct
         of_list lines
         |> filter ~f:(Fun.flip String.contains '^')
         |> map ~f:(String.find_all_l ~sub:"^")
-        |> map ~f:IntSet.of_list |> to_list)
+        |> map ~f:S.of_list |> to_list)
     in
     { start; splits }
 
   let tick (count, beams) splits =
-    let to_split = IntSet.inter beams splits
-    and continue = IntSet.diff beams splits in
-    ( count + IntSet.cardinal to_split,
+    let to_split = S.intersect beams splits
+    and continue = S.diff beams splits in
+    ( count + S.cardinal to_split,
       Iter.(
-        to_split |> IntSet.to_iter
-        |> flat_map_l ~f:(fun x -> [ x - 1; x + 1 ])
-        |> IntSet.add_iter continue) )
+        to_split |> S.to_iter
+        |> flat_map_l ~f:(fun x -> [ S.map_elt sub x; S.map_elt inc x ])
+        |> S.add_iter continue) )
 
   let run { start; splits } =
-    splits |> List.fold_left ~init:(0, IntSet.singleton start) ~f:tick
+    splits |> List.fold_left ~init:(0, S.singleton start) ~f:tick
 
   let splits t = run t |> fst
+  let paths t = run t |> snd |> S.cardinal
+
+  let visualize t =
+    let _, beams = run t in
+    let min = S.min_elt beams and max = S.max_elt beams in
+    let new_line = String.make (1 + max - min) '.' in
+    let idx entry = S.entry_elt entry - min in
+    let format_line ?(init = new_line) entry_char s =
+      Iter.(
+        s |> S.to_iter
+        |> fold ~f:(fun str entry ->
+               String.set str (idx entry) (entry_char entry)))
+        ~init
+    in
+    let f acc splits =
+      let count, beams = tick acc splits in
+      let beams_str = format_line S.entry_to_char beams in
+      Printf.printf "%s\n" @@ format_line ~init:beams_str (Fun.const '^') splits;
+      Printf.printf "%s\n" beams_str;
+      (count, beams)
+    in
+    Printf.printf "%s\n" @@ format_line (Fun.const 'S') @@ S.singleton t.start;
+    Printf.printf "%s\n" @@ format_line S.entry_to_char @@ S.singleton t.start;
+    t.splits |> List.fold_left ~f ~init:(0, S.singleton t.start)
 end
 
 module Part_1 = struct
-  let parse = Tachyon_manifold.of_string
+  module IntSet : sig
+    include SETOID with type elt = Int.t
+
+    val intersect : t -> t -> t
+    val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
+  end = struct
+    include Set.Make (Int)
+
+    let intersect = inter
+
+    type entry = Int.t
+
+    let map_elt f x = f x
+    let entry_elt = Fun.id
+    let pp_hum f t = Format.fprintf f "%s" @@ to_string Int.to_string t
+    let entry_to_char = Fun.const '|'
+  end
+
+  module Classical_manifold = Tachyon_manifold (IntSet)
+
+  let parse = Classical_manifold.of_string
   let unparse = Int.to_string
-  let go = Tachyon_manifold.splits
+  let go = Classical_manifold.splits
 
   let run (input : string) : (string, string) result =
     Result.guard_str @@ fun () -> parse input |> go |> unparse
 end
 
-(* Problem description update *)
+(* With a quantum tachyon manifold, only a single tachyon particle is sent through the
+   manifold. A tachyon particle takes both the left and right path of each splitter
+   encountered.
 
-(* Example run-through, again *)
+   Since this is impossible, the manual recommends the many-worlds interpretation of quantum
+   tachyon splitting: each time a particle reaches a splitter, it's actually time itself which
+   splits. In one timeline, the particle went left, and in the other timeline, the particle
+   went right.
+
+   To fix the manifold, what you really need to know is the number of timelines active after a
+   single particle completes all of its possible journeys through the manifold. *)
+
+(* In the above example, there are many timelines. For instance, there's the timeline where the
+   particle always went left:
+
+   .......S.......
+   .......|.......
+   ......|^.......
+   ......|........
+   .....|^.^......
+   .....|.........
+   ....|^.^.^.....
+   ....|..........
+   ...|^.^...^....
+   ...|...........
+   ..|^.^...^.^...
+   ..|............
+   .|^...^.....^..
+   .|.............
+   |^.^.^.^.^...^.
+   |..............
+
+   Or, there's the timeline where the particle alternated going left and right at each
+   splitter:
+
+   .......S.......
+   .......|.......
+   ......|^.......
+   ......|........
+   ......^|^......
+   .......|.......
+   .....^|^.^.....
+   ......|........
+   ....^.^|..^....
+   .......|.......
+   ...^.^.|.^.^...
+   .......|.......
+   ..^...^|....^..
+   .......|.......
+   .^.^.^|^.^...^.
+   ......|........
+
+   Or, there's the timeline where the particle ends up at the same point as the alternating
+   timeline, but takes a totally different path to get there:
+
+   .......S.......
+   .......|.......
+   ......|^.......
+   ......|........
+   .....|^.^......
+   .....|.........
+   ....|^.^.^.....
+   ....|..........
+   ....^|^...^....
+   .....|.........
+   ...^.^|..^.^...
+   ......|........
+   ..^..|^.....^..
+   .....|.........
+   .^.^.^|^.^...^.
+   ......|........
+
+   In this example, in total, the particle ends up on 40 different timelines.
+
+   Apply the many-worlds interpretation of quantum tachyon splitting to your manifold
+   diagram. In total, how many different timelines would a single tachyon particle end up
+   on? *)
 
 module Part_2 = struct
-  let parse = Fun.id
-  let unparse = Fun.id
-  let go = Fun.id
+  module IntBag : sig
+    include SETOID with type elt = Int.t with type entry = Int.t * Int.t
+
+    val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
+  end = struct
+    module Map' = Map.Make (Int)
+
+    type t = int Map'.t
+    type elt = Int.t
+
+    let of_list l =
+      Iter.(l |> of_list |> map ~f:(fun x -> (x, 1)) |> Map'.of_iter)
+
+    let singleton = Fun.flip Map'.singleton 1
+
+    let intersect : t -> t -> t =
+      Map'.merge_safe ~f:(fun _ -> function
+        | `Both (l, r) -> Option.some @@ max l r
+        | _ -> None)
+
+    let diff : t -> t -> t =
+      Map'.merge_safe ~f:(fun _ -> function
+        | `Left l -> Some l
+        | `Both _ | `Right _ -> None)
+
+    let cardinal : t -> int =
+      Map'.to_iter %> Iter.map ~f:snd %> Iter.reduce ~m:Monoid.add
+
+    type entry = elt * Int.t
+
+    let map_elt f (x, count) = (f x, count)
+    let entry_elt = fst
+    let to_iter : t -> entry Iter.t = Map'.to_iter
+    let add_iter = Map'.add_iter_with ~f:(fun _ -> ( + ))
+
+    let entry_to_char (_, count) =
+      try String.get ".123456789" count with Invalid_argument _ -> '!'
+
+    let min_elt = Map'.min_binding %> fst
+    let max_elt = Map'.max_binding %> fst
+
+    let pp_hum f t =
+      Format.fprintf f "{@[%a@]}"
+        ( List.pp @@ fun f (l, r) ->
+          Format.fprintf f "@[%a:%a@]" Int.pp l Int.pp r )
+      @@ Map'.to_list t
+  end
+
+  module Quantum_manifold = Tachyon_manifold (IntBag)
+
+  let parse = Quantum_manifold.of_string
+  let unparse = Int.to_string
+  let go = Quantum_manifold.paths
 
   let run (input : string) : (string, string) result =
     Result.guard_str @@ fun () -> parse input |> go |> unparse
