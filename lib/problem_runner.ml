@@ -12,6 +12,7 @@ end
 module Run_mode = struct
   type t =
     | Test_from_puzzle_input of { credentials : Credentials.t option }
+    | Test_example
     | Submit of { credentials : Credentials.t }
 
   let read_file (filename : string) : string =
@@ -37,9 +38,7 @@ module Run_mode = struct
     in
 
     (* Check if cached input exists *)
-    let filename =
-      Filename.concat year_dir @@ Format.sprintf "%02d.txt" day
-    in
+    let filename = Filename.concat year_dir @@ Format.sprintf "%02d.txt" day in
     if Sys.file_exists filename then Ok (read_file filename)
       (* If not, fetch it from adventofcode.com *)
     else
@@ -50,8 +49,7 @@ module Run_mode = struct
           Result.map_error Piaf.Error.to_string
           @@ Eio_main.run
           @@ fun env ->
-          Eio.Switch.run
-          @@ fun sw ->
+          Eio.Switch.run @@ fun sw ->
           let uri =
             Uri.of_string
             @@ String.concat "/"
@@ -69,22 +67,22 @@ module Run_mode = struct
           write_file filename body;
           Result.ok body
 
-  let get_input (year : int) (day : int) : t -> (string, string) result =
-    function
+  let get_input (year : int) (day : int) (example : string) :
+      t -> (string, string) result = function
     | Test_from_puzzle_input { credentials } ->
         get_puzzle_input year day credentials
+    | Test_example -> Ok example
     | Submit { credentials } -> get_puzzle_input year day (Some credentials)
 
   let cleanup (year : int) (day : int) (part : int) (output : string)
       (run_mode : t) : (string option, string) result =
     match run_mode with
-    | Test_from_puzzle_input _ -> Ok None
+    | Test_from_puzzle_input _ | Test_example -> Ok None
     | Submit { credentials } ->
         Result.map_error Piaf.Error.to_string
         @@ Eio_main.run
         @@ fun env ->
-        Eio.Switch.run
-        @@ fun sw ->
+        Eio.Switch.run @@ fun sw ->
         let uri =
           Uri.of_string
           @@ String.concat "/"
@@ -114,7 +112,7 @@ end
 
 let run_problem (module Problem : Problem.T) (run_mode : Run_mode.t)
     (year : int) (day : int) (part : int) : (string, string) result =
-  let@ input = Run_mode.get_input year day run_mode in
+  let@ input = Run_mode.get_input year day Problem.example run_mode in
   let@ result =
     match part with
     | 1 -> Problem.Part_1.run input
@@ -127,8 +125,8 @@ let run_problem (module Problem : Problem.T) (run_mode : Run_mode.t)
   in
   Ok result
 
-let find_problem (year : int) (day : int) :
-    ((module Problem.T), string) result =
+let find_problem (year : int) (day : int) : ((module Problem.T), string) result
+    =
   match
     List.find_opt
       (fun (module Problem : Problem.T) ->
@@ -138,8 +136,8 @@ let find_problem (year : int) (day : int) :
   | Some p -> Ok p
   | None ->
       Error
-        (Format.sprintf "Problem (year = %d, day = %d) not implemented."
-           year day)
+        (Format.sprintf "Problem (year = %d, day = %d) not implemented." year
+           day)
 
 let run (options : Options.t) : (string, string) result =
   let@ problem = find_problem options.year options.day in

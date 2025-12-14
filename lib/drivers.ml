@@ -32,10 +32,18 @@ module Cli = struct
         "If set, attempts to submit the problem output to adventofcode.com."
       in
       Arg.(value & flag & info [ "submit" ] ~docv:"SUBMIT" ~doc)
+
+    let example =
+      let doc =
+        "If set, runs on the example input rather than the \
+         possibly-downloading the input."
+      in
+      Arg.(value & flag & info [ "example" ] ~docv:"EXAMPLE" ~doc)
   end
 
   let run (year : int option) (day : int option) (part : int option)
-      (auth_token : string option) (submit : bool) : unit Cmdliner.Term.ret =
+      (auth_token : string option) (submit : bool) (example : bool) :
+      unit Cmdliner.Term.ret =
     match (year, day, part) with
     | None, _, _ -> `Error (false, {|"year" argument required.|})
     | _, None, _ -> `Error (false, {|"day" argument required.|})
@@ -43,10 +51,11 @@ module Cli = struct
     | Some year, Some day, Some part -> (
         let output =
           let@ (run_mode : Problem_runner.Run_mode.t) =
-            match (auth_token, submit) with
-            | None, true ->
+            match (auth_token, submit, example) with
+            | _, true, true -> Error "Cannot submit from the example text"
+            | None, true, false ->
                 Error {|Must provide AUTH_TOKEN when using --submit|}
-            | token, false ->
+            | token, false, false ->
                 Ok
                   (Problem_runner.Run_mode.Test_from_puzzle_input
                      {
@@ -54,7 +63,8 @@ module Cli = struct
                          Option.map Problem_runner.Credentials.of_auth_token
                            token;
                      })
-            | Some token, true ->
+            | _, false, true -> Ok Problem_runner.Run_mode.Test_example
+            | Some token, true, false ->
                 Ok
                   (Problem_runner.Run_mode.Submit
                      {
@@ -78,7 +88,7 @@ module Cli = struct
         Term.(
           ret
             (const run $ Terms.year $ Terms.day $ Terms.part $ Terms.auth_token
-           $ Terms.submit))
+           $ Terms.submit $ Terms.example))
     in
     exit @@ Cmdliner.Cmd.eval cmd
 end

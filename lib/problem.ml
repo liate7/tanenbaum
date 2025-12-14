@@ -6,21 +6,26 @@ module type T = sig
   val day : int
   (** The day that this puzzle is from. *)
 
+  val example : string
+  (** The example given in the question (or [""] if you don't care) *)
+
   (** Contains specific to the first part of the puzzle. *)
   module Part_1 : sig
     val run : string -> (string, string) result
-    (** Runs the first part of the puzzle. 
+    (** Runs the first part of the puzzle.
 
-        This should return [Error] if something goes wrong during execution -- for example, there 
-        was a parsing error. If [Error] was returned, Tanenbaum will ignore the [--submit] flag. *)
+        This should return [Error] if something goes wrong during execution --
+        for example, there was a parsing error. If [Error] was returned,
+        Tanenbaum will ignore the [--submit] flag. *)
   end
 
   (** Contains specific to the second part of the puzzle. *)
   module Part_2 : sig
     val run : string -> (string, string) result
-    (** Runs the second part of the puzzle. 
+    (** Runs the second part of the puzzle.
 
-        This should return [Error] if something goes wrong during execution -- for example, there 
-        was a parsing error. If [Error] was returned, Tanenbaum will ignore the [--submit] flag. *)
+        This should return [Error] if something goes wrong during execution --
+        for example, there was a parsing error. If [Error] was returned,
+        Tanenbaum will ignore the [--submit] flag. *)
   end
 end
