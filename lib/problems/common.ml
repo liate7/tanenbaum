@@ -1,6 +1,7 @@
 include ContainersLabels
 
 let ( <| ) = ( @@ )
+let ( %> ) = Fun.( %> )
 
 module IntMap = Map.Make (Int)
 
