@@ -131,7 +131,15 @@ let example =
 
    In this example, a tachyon beam is split a total of 21 times. *)
 
-module type SETOID = sig
+module type Setoid_entry = sig
+  type t
+  type elt
+
+  val map_elt : (elt -> elt) -> t -> t
+  val elt : t -> elt
+end
+
+module type Setoid = sig
   type t
   type elt
 
@@ -141,16 +149,13 @@ module type SETOID = sig
   val diff : t -> t -> t
   val cardinal : t -> int
 
-  type entry
+  module Entry : Setoid_entry with type elt := elt
 
-  val map_elt : (elt -> elt) -> entry -> entry
-  val entry_elt : entry -> elt
-  val add_iter : t -> entry Iter.t -> t
-  val to_iter : t -> entry Iter.t
+  val add_iter : t -> Entry.t Iter.t -> t
+  val to_iter : t -> Entry.t Iter.t
 
   (* Visualization *)
 
-  val entry_to_char : entry -> char
   val min_elt : t -> elt
   val max_elt : t -> elt
 end
@@ -158,7 +163,19 @@ end
 let sub x = x - 1
 let inc x = x + 1
 
-module Tachyon_manifold (S : SETOID with type elt = Int.t) = struct
+module type ARG = sig
+  type elt = Int.t
+
+  module Entry : sig
+    include Setoid_entry with type elt := elt
+
+    val to_char : t -> char
+  end
+
+  include Setoid with type elt := Int.t with module Entry := Entry
+end
+
+module Tachyon_manifold (S : ARG) = struct
   type t = { start : int; splits : S.t list }
 
   let of_string str =
@@ -183,7 +200,8 @@ module Tachyon_manifold (S : SETOID with type elt = Int.t) = struct
     ( count + S.cardinal to_split,
       Iter.(
         to_split |> S.to_iter
-        |> flat_map_l ~f:(fun x -> [ S.map_elt sub x; S.map_elt inc x ])
+        |> flat_map_l ~f:(fun x ->
+               [ S.Entry.map_elt sub x; S.Entry.map_elt inc x ])
         |> S.add_iter continue) )
 
   let run { start; splits } =
@@ -196,7 +214,7 @@ module Tachyon_manifold (S : SETOID with type elt = Int.t) = struct
     let _, beams = run t in
     let min = S.min_elt beams and max = S.max_elt beams in
     let new_line = String.make (1 + max - min) '.' in
-    let idx entry = S.entry_elt entry - min in
+    let idx entry = S.Entry.elt entry - min in
     let format_line ?(init = new_line) entry_char s =
       Iter.(
         s |> S.to_iter
@@ -206,33 +224,35 @@ module Tachyon_manifold (S : SETOID with type elt = Int.t) = struct
     in
     let f acc splits =
       let count, beams = tick acc splits in
-      let beams_str = format_line S.entry_to_char beams in
+      let beams_str = format_line S.Entry.to_char beams in
       Printf.printf "%s\n" @@ format_line ~init:beams_str (Fun.const '^') splits;
       Printf.printf "%s\n" beams_str;
       (count, beams)
     in
     Printf.printf "%s\n" @@ format_line (Fun.const 'S') @@ S.singleton t.start;
-    Printf.printf "%s\n" @@ format_line S.entry_to_char @@ S.singleton t.start;
+    Printf.printf "%s\n" @@ format_line S.Entry.to_char @@ S.singleton t.start;
     t.splits |> List.fold_left ~f ~init:(0, S.singleton t.start)
 end
 
 module Part_1 = struct
   module IntSet : sig
-    include SETOID with type elt = Int.t
+    include ARG with type elt = Int.t with type Entry.t = Int.t
 
-    val intersect : t -> t -> t
     val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
   end = struct
     include Set.Make (Int)
 
     let intersect = inter
 
-    type entry = Int.t
+    module Entry = struct
+      type t = Int.t
 
-    let map_elt f x = f x
-    let entry_elt = Fun.id
+      let map_elt f x = f x
+      let elt = Fun.id
+      let to_char = Fun.const '|'
+    end
+
     let pp_hum f t = Format.fprintf f "%s" @@ to_string Int.to_string t
-    let entry_to_char = Fun.const '|'
   end
 
   module Classical_manifold = Tachyon_manifold (IntSet)
@@ -323,53 +343,64 @@ end
    diagram. In total, how many different timelines would a single tachyon particle end up
    on? *)
 
+module Bag (O : Map.OrderedType) :
+  Setoid with type elt = O.t with type Entry.t = O.t * Int.t = struct
+  module Map' = Map.Make (O)
+
+  type t = int Map'.t
+  type elt = O.t
+
+  let of_list l =
+    Iter.(l |> of_list |> map ~f:(fun x -> (x, 1)) |> Map'.of_iter)
+
+  let singleton = Fun.flip Map'.singleton 1
+
+  let intersect : t -> t -> t =
+    Map'.merge_safe ~f:(fun _ -> function
+      | `Both (l, r) -> Option.some @@ max l r
+      | _ -> None)
+
+  let diff : t -> t -> t =
+    Map'.merge_safe ~f:(fun _ -> function
+      | `Left l -> Some l
+      | `Both _ | `Right _ -> None)
+
+  let cardinal : t -> int =
+    Map'.to_iter %> Iter.map ~f:snd %> Iter.reduce ~m:Monoid.add
+
+  module Entry = struct
+    type t = elt * Int.t
+
+    let map_elt f (x, count) = (f x, count)
+    let elt = fst
+  end
+
+  let to_iter : t -> Entry.t Iter.t = Map'.to_iter
+  let add_iter = Map'.add_iter_with ~f:(fun _ -> ( + ))
+  let min_elt = Map'.min_binding %> fst
+  let max_elt = Map'.max_binding %> fst
+end
+
 module Part_2 = struct
   module IntBag : sig
-    include SETOID with type elt = Int.t with type entry = Int.t * Int.t
+    include ARG with type elt = Int.t with type Entry.t = Int.t * Int.t
 
     val pp_hum : Format.formatter -> t -> unit [@@ocaml.toplevel_printer]
   end = struct
-    module Map' = Map.Make (Int)
+    include Bag (Int)
 
-    type t = int Map'.t
-    type elt = Int.t
+    module Entry = struct
+      include Entry
 
-    let of_list l =
-      Iter.(l |> of_list |> map ~f:(fun x -> (x, 1)) |> Map'.of_iter)
-
-    let singleton = Fun.flip Map'.singleton 1
-
-    let intersect : t -> t -> t =
-      Map'.merge_safe ~f:(fun _ -> function
-        | `Both (l, r) -> Option.some @@ max l r
-        | _ -> None)
-
-    let diff : t -> t -> t =
-      Map'.merge_safe ~f:(fun _ -> function
-        | `Left l -> Some l
-        | `Both _ | `Right _ -> None)
-
-    let cardinal : t -> int =
-      Map'.to_iter %> Iter.map ~f:snd %> Iter.reduce ~m:Monoid.add
-
-    type entry = elt * Int.t
-
-    let map_elt f (x, count) = (f x, count)
-    let entry_elt = fst
-    let to_iter : t -> entry Iter.t = Map'.to_iter
-    let add_iter = Map'.add_iter_with ~f:(fun _ -> ( + ))
-
-    let entry_to_char (_, count) =
-      try String.get ".123456789" count with Invalid_argument _ -> '!'
-
-    let min_elt = Map'.min_binding %> fst
-    let max_elt = Map'.max_binding %> fst
+      let to_char (_, count) =
+        try String.get ".123456789" count with Invalid_argument _ -> '!'
+    end
 
     let pp_hum f t =
       Format.fprintf f "{@[%a@]}"
         ( List.pp @@ fun f (l, r) ->
           Format.fprintf f "@[%a:%a@]" Int.pp l Int.pp r )
-      @@ Map'.to_list t
+      @@ (to_iter t |> Iter.to_list)
   end
 
   module Quantum_manifold = Tachyon_manifold (IntBag)
