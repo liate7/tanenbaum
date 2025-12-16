@@ -155,9 +155,9 @@ let parse =
   String.lines_iter %> Iter.map ~f:Box.of_string %> Iter.map ~f:UF.make
   %> Iter.to_list
 
-module Part_1 = struct
-  let unparse = Int.to_string
+let unparse = Int.to_string
 
+module Part_1 = struct
   let go boxes =
     let heap = Iter.diagonal_l boxes |> DistsHeap.of_iter in
     Iter.(
@@ -176,14 +176,30 @@ module Part_1 = struct
     Result.guard_str @@ fun () -> parse input |> go |> unparse
 end
 
-(* Problem description update *)
+(* The Elves were right; they definitely don't have enough extension cables. You'll need to
+   keep connecting junction boxes together until they're all in one large circuit.
 
-(* Example run-through, again *)
+   The Elves need to know how far those junction boxes are from the wall so they can pick the
+   right extension cable. Continue connecting the closest unconnected pairs of junction boxes
+   together until they're all in the same circuit. What do you get if you multiply together the
+   X coordinates of the last two junction boxes you need to connect? *)
+
+(* Continuing the above example, the first connection which causes all of the junction boxes to
+   form a single circuit is between the junction boxes at 216,146,977 and
+   117,168,530. [M]ultiplying the X coordinates of those two junction boxes (216 and 117)
+   produces 25272. *)
 
 module Part_2 = struct
-  let parse = Fun.id
-  let unparse = Fun.id
-  let go = Fun.id
+  let go boxes =
+    let count = List.length boxes in
+    let heap = Iter.diagonal_l boxes |> DistsHeap.of_iter in
+    heap
+    |> Iter.unfoldr (DistsHeap.take %> Option.map Pair.swap)
+    |> Iter.find (fun (l, r) ->
+           UF.merge l r;
+           Option.return_if (UF.size l = count) (l, r))
+    |> Option.get_exn_or "Never fully connected, somehow"
+    |> fun (l, r) -> (UF.value l).x * (UF.value r).x
 
   let run (input : string) : (string, string) result =
     Result.guard_str @@ fun () -> parse input |> go |> unparse
