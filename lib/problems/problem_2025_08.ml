@@ -69,8 +69,6 @@ let example =
 (* Planning:
    We need:
    - A union-find
-     (actually, not quite!  We want the equivalence classes, and I /think/ U-F often
-     avoids explicitly having those around.)
    - A way to get point pairs by minimum distance (probably a heap)
    - A union-find -> ~ set of connected components, ideally ordered by size *)
 
@@ -99,9 +97,23 @@ module Box = struct
          + magn_on (fun { z; _ } -> of_int z) l r)
 end
 
-module UF = struct
-  type 'a t = { value : 'a; mutable info : 'a info; id : int }
-  and 'a info = Parent of 'a t | Size of int
+module UF : sig
+  type 'a info
+  type 'a t = private { value : 'a; mutable info : 'a info }
+
+  val make : 'a -> 'a t
+  val value : 'a t -> 'a
+  val merge : 'a t -> 'a t -> unit
+  val equiv : 'a t -> 'a t -> bool
+  val ( =~= ) : 'a t -> 'a t -> bool
+  val hash : 'a t -> int
+  val size : 'a t -> int
+end = struct
+  (* Based heavily on [[https://en.wikipedia.org/wiki/Disjoint-set_data_structure]] *)
+  type root_info = { size : int; id : int }
+
+  type 'a t = { value : 'a; mutable info : 'a info }
+  and 'a info = Parent of 'a t | Root of root_info
 
   let make_id =
     let n = ref 0 in
@@ -111,33 +123,41 @@ module UF = struct
         incr n;
         !n)
 
-  let make value = { value; info = Size 1; id = make_id () }
+  let make value = { value; info = Root { size = 1; id = make_id () } }
   let value { value; _ } = value
 
-  let rec find t =
+  let rec find_exemplar t =
     match t.info with
-    | Size _ -> t
+    | Root info -> (t, info)
     | Parent p ->
-        let p = find p in
-        t.info <- Parent (find p);
-        p
+        let p, info = find_exemplar p in
+        t.info <- Parent p;
+        (p, info)
 
   let merge l r =
-    let l, r = (find l, find r) in
-    if not @@ Equal.physical l r then
-      match (l.info, r.info) with
-      | Size l', Size r' when l' > r' ->
+    let (l, l_info), (r, r_info) = (find_exemplar l, find_exemplar r) in
+    if l_info.id <> r_info.id then
+      match (l_info, r_info) with
+      | { size = l'; id }, { size = r'; id = _ } when l' > r' ->
           r.info <- Parent l;
-          l.info <- Size (l' + r')
-      | Size l', Size r' ->
+          l.info <- Root { size = l' + r'; id }
+      | { size = l'; id = _ }, { size = r'; id } ->
           l.info <- Parent r;
-          r.info <- Size (l' + r')
-      | Parent _, _ | _, Parent _ -> assert false
+          r.info <- Root { size = l' + r'; id }
 
-  let equiv l r = Equal.physical (find l) (find r)
+  let equiv l r =
+    let (_, l_info), (_, r_info) = (find_exemplar l, find_exemplar r) in
+    Int.equal l_info.id r_info.id
+
   let ( =~= ) = equiv
-  let hash { id; _ } = Int.hash id
-  let size t = match (find t).info with Size s -> s | _ -> assert false
+
+  let hash t =
+    let _, info = find_exemplar t in
+    Int.hash info.id
+
+  let size t =
+    let _, { size; id = _ } = find_exemplar t in
+    size
 end
 
 module DistsHeap = Heap.Make_from_compare (struct
@@ -166,8 +186,8 @@ module Part_1 = struct
       |> take 1000
       |> iter ~f:(fun (l, r) -> UF.merge l r));
     Iter.(
-      boxes |> of_list |> map ~f:UF.find
-      |> group_by ~eq:Equal.physical ~hash:UF.hash
+      boxes |> of_list
+      |> group_by ~eq:UF.equiv ~hash:UF.hash
       |> map ~f:(fun l -> List.head_opt l |> Option.map_or ~default:0 UF.size)
       |> sort ~cmp:(fun l r -> Int.compare r l)
       |> take 3 |> reduce ~m:Monoid.mul)
