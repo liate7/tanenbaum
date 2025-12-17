@@ -25,53 +25,6 @@ let example = "3-5\n10-14\n16-20\n12-18\n\n1\n5\n8\n11\n17\n32\n"
 
    So, in this example, 3 of the available ingredient IDs are fresh. *)
 
-module Range : sig
-  type t = private { lo : int; hi : int }
-  (** This is an /inclusive/ range. Invariant: [lo <= hi] *)
-
-  val contains : t -> int -> bool
-
-  val ( -- ) : int -> int -> t
-  (** Inclusive range constructor *)
-
-  val ( --^ ) : int -> int -> t
-  (** Half-open range constructor. [l --^ r] is like \[l, r\) *)
-
-  val intersect : t -> t -> bool
-
-  val ( <> ) : t -> t -> [ `Merged of t | `LR of t * t | `RL of t * t ]
-  (** [l <> r] either creates a new range that exactly covers [l] and [r], or
-      returns them sorted *)
-
-  val to_iter : t -> int Iter.t
-  val length : t -> int
-end = struct
-  type t = { lo : int; hi : int }
-
-  let contains { lo; hi } x = lo <= x && x <= hi
-
-  let ( -- ) lo hi =
-    assert (lo <= hi);
-    { lo; hi }
-
-  let ( --^ ) lo hi =
-    assert (lo < hi);
-    { lo; hi = hi - 1 }
-
-  let intersect l r =
-    contains r l.lo || contains r l.hi || contains l r.lo || contains l r.hi
-
-  let ( <> ) l r =
-    if intersect l r then
-      let lo = min l.lo r.lo and hi = max l.hi r.hi in
-      `Merged { lo; hi }
-    else if l.lo <= r.lo then `LR (l, r)
-    else `RL (r, l)
-
-  let to_iter { lo; hi } = Iter.(lo -- hi)
-  let length { lo; hi } = hi - lo + 1
-end
-
 module DB = struct
   type t = Range.t list
   (** Invariant: is sorted *)

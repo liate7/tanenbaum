@@ -160,9 +160,6 @@ module type Setoid = sig
   val max_elt : t -> elt
 end
 
-let sub x = x - 1
-let inc x = x + 1
-
 module type ARG = sig
   type elt = Int.t
 

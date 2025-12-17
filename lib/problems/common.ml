@@ -69,6 +69,8 @@ module Point2d = struct
         { x; y }
     | _ -> None
 
+  let of_pair (x, y) = { x; y }
+  let to_pair { x; y } = (x, y)
   let origin = { x = 0; y = 0 }
 
   let magn { x; y } =
@@ -78,7 +80,9 @@ module Point2d = struct
   let map f { x; y } = { x = f x; y = f y }
   let map2 f l r = { x = f l.x r.x; y = f l.y r.y }
   let dist l r = magn @@ map2 ( - ) l r
-  let area l r = (abs (r.x - l.x) + 1) * (abs (r.y - l.y) + 1)
+  let map_to_pair f { x; y } = (f x, f y)
+  let map_x f { x; y } = { x = f x; y }
+  let map_y f { x; y } = { x; y = f y }
 
   let compare =
     Fun.lexicographic
@@ -109,3 +113,53 @@ module Point3d = struct
   let map2 f l r = { x = f l.x r.x; y = f l.y r.y; z = f l.z r.z }
   let dist l r = magn @@ map2 ( - ) l r
 end
+
+module Range : sig
+  type t = private { lo : int; hi : int }
+  (** This is an /inclusive/ range. Invariant: [lo <= hi] *)
+
+  val contains : t -> int -> bool
+
+  val ( -- ) : int -> int -> t
+  (** Inclusive range constructor *)
+
+  val ( --^ ) : int -> int -> t
+  (** Half-open range constructor. [l --^ r] is like \[l, r\) *)
+
+  val intersect : t -> t -> bool
+
+  val ( <> ) : t -> t -> [ `Merged of t | `LR of t * t | `RL of t * t ]
+  (** [l <> r] either creates a new range that exactly covers [l] and [r], or
+      returns them sorted *)
+
+  val to_iter : t -> int Iter.t
+  val length : t -> int
+end = struct
+  type t = { lo : int; hi : int }
+
+  let contains { lo; hi } x = lo <= x && x <= hi
+
+  let ( -- ) lo hi =
+    assert (lo <= hi);
+    { lo; hi }
+
+  let ( --^ ) lo hi =
+    assert (lo < hi);
+    { lo; hi = hi - 1 }
+
+  let intersect l r =
+    contains r l.lo || contains r l.hi || contains l r.lo || contains l r.hi
+
+  let ( <> ) l r =
+    if intersect l r then
+      let lo = min l.lo r.lo and hi = max l.hi r.hi in
+      `Merged { lo; hi }
+    else if l.lo <= r.lo then `LR (l, r)
+    else `RL (r, l)
+
+  let to_iter { lo; hi } = Iter.(lo -- hi)
+  let length { lo; hi } = hi - lo + 1
+end
+
+let sub x = x - 1
+let inc x = x + 1
